@@ -1,6 +1,6 @@
 --dist_name bibleverseshorts
 --bootstrap sdl2
---requirements python3,kivy,ffmpeg,libx264,av_codecs,piper
+--requirements python3,kivy,ffmpeg,libx264,av_codecs,onnxruntime,piper
 --arch arm64-v8a
 --android_api 35
 --ndk_api 24

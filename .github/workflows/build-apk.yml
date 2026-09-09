@@ -21,28 +21,14 @@ jobs:
 
     steps:
 
-      # ============================================================
-      # CHECKOUT
-      # ============================================================
-
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
-
-
-      # ============================================================
-      # PYTHON
-      # ============================================================
 
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
           python-version: "3.11"
-          cache: "pip"
-
-
-      # ============================================================
-      # JAVA
-      # ============================================================
+          cache: pip
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
@@ -50,90 +36,40 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-
-      # ============================================================
-      # ANDROID SDK
-      # ============================================================
-
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-
-      - name: Accept Android licenses
+      - name: Accept licenses
         shell: bash
         run: |
           yes | sdkmanager --licenses || true
 
-
-      - name: Install Android SDK and NDK
+      - name: Install Android SDK
         shell: bash
         run: |
-
           sdkmanager \
             "platform-tools" \
             "platforms;android-${ANDROID_API}" \
             "build-tools;35.0.0" \
             "ndk;${NDK_VERSION}"
 
-
-      # ============================================================
-      # ANDROID ENVIRONMENT
-      # ============================================================
-
-      - name: Configure Android environment
+      - name: Configure Android
         shell: bash
         run: |
-
           echo "ANDROID_HOME=${ANDROID_SDK_ROOT}" >> "$GITHUB_ENV"
 
-          echo "ANDROID_NDK_HOME=${ANDROID_SDK_ROOT}/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=${ANDROID_SDK_ROOT}/ndk/${NDK_VERSION}" \
+            >> "$GITHUB_ENV"
 
-          echo "ANDROID_NDK_ROOT=${ANDROID_SDK_ROOT}/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_ROOT=${ANDROID_SDK_ROOT}/ndk/${NDK_VERSION}" \
+            >> "$GITHUB_ENV"
 
-          echo "${ANDROID_SDK_ROOT}/platform-tools" >> "$GITHUB_PATH"
+          echo "${ANDROID_SDK_ROOT}/platform-tools" \
+            >> "$GITHUB_PATH"
 
-          echo "${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
-
-
-      - name: Verify Android environment
+      - name: Install build dependencies
         shell: bash
         run: |
-
-          echo "=============================================="
-          echo "ANDROID ENVIRONMENT"
-          echo "=============================================="
-
-          echo "ANDROID_HOME:"
-          echo "${ANDROID_HOME}"
-
-          echo
-          echo "ANDROID_NDK_HOME:"
-          echo "${ANDROID_NDK_HOME}"
-
-          echo
-          echo "NDK:"
-          ls -la "${ANDROID_NDK_HOME}"
-
-          echo
-          echo "ADB:"
-          adb version || true
-
-          echo
-          echo "Java:"
-          java -version
-
-          echo
-          echo "=============================================="
-
-
-      # ============================================================
-      # NATIVE BUILD DEPENDENCIES
-      # ============================================================
-
-      - name: Install native build dependencies
-        shell: bash
-        run: |
-
           sudo apt-get update
 
           sudo apt-get install -y \
@@ -164,88 +100,9 @@ jobs:
             wget \
             zip
 
-
-      # ============================================================
-      # AUTOTOOLS DIAGNOSTICS
-      # ============================================================
-
-      - name: Verify Autotools
+      - name: Install p4a
         shell: bash
         run: |
-
-          set -e
-
-          echo "=============================================="
-          echo "AUTOTOOLS"
-          echo "=============================================="
-
-          echo
-          echo "autoconf:"
-          autoconf --version
-
-          echo
-          echo "autoreconf:"
-          autoreconf --version
-
-          echo
-          echo "automake:"
-          automake --version
-
-          echo
-          echo "aclocal:"
-          aclocal --version
-
-          echo
-          echo "autopoint:"
-          autopoint --version
-
-          echo
-          echo "libtool:"
-          libtool --version
-
-          echo
-          echo "gettext:"
-          gettext --version
-
-          echo
-          echo "pkg-config:"
-          pkg-config --version
-
-          echo
-          echo "=============================================="
-
-
-      # ============================================================
-      # CMAKE / NINJA
-      # ============================================================
-
-      - name: Verify CMake and Ninja
-        shell: bash
-        run: |
-
-          cmake --version
-
-          echo
-
-          ninja --version
-
-          echo
-
-          gcc --version
-
-          echo
-
-          g++ --version
-
-
-      # ============================================================
-      # PYTHON FOR ANDROID
-      # ============================================================
-
-      - name: Install python-for-android
-        shell: bash
-        run: |
-
           python -m pip install \
             --upgrade \
             pip \
@@ -255,91 +112,80 @@ jobs:
           python -m pip install \
             python-for-android
 
-
-      - name: Verify python-for-android
+      - name: Verify p4a
         shell: bash
         run: |
+          python -m pythonforandroid.toolchain --help
 
-          python -m pythonforandroid.toolchain \
-            --help
-
-          echo
-
-          p4a recipes | head -100
-
-
-      # ============================================================
-      # SHOW PROJECT
-      # ============================================================
-
-      - name: Show repository structure
+      - name: Verify custom recipes
         shell: bash
         run: |
+          set -e
 
-          echo "=============================================="
-          echo "REPOSITORY"
-          echo "=============================================="
+          test -f p4a-recipes/onnxruntime/__init__.py
+          test -f p4a-recipes/piper/__init__.py
+          test -f p4a-recipes/piper_phonemize/__init__.py
 
-          find . \
-            -maxdepth 5 \
-            -type f \
-            -not -path "./.git/*" \
-            | sort
+          python - <<'PY'
+          import sys
+          sys.path.insert(0, "p4a-recipes")
 
-          echo
-          echo "=============================================="
+          import onnxruntime
+          import piper
+          import piper_phonemize
 
+          assert hasattr(onnxruntime, "recipe")
+          assert hasattr(piper, "recipe")
+          assert hasattr(piper_phonemize, "recipe")
 
-      # ============================================================
-      # VERIFY REQUIRED APPLICATION FILES
-      # ============================================================
+          print("onnxruntime recipe:", onnxruntime.recipe)
+          print("piper recipe:", piper.recipe)
+          print(
+              "piper_phonemize recipe:",
+              piper_phonemize.recipe
+          )
 
-      - name: Verify application files
+          print("Custom recipes OK.")
+          PY
+
+      - name: List recipes
         shell: bash
         run: |
+          set -o pipefail
+          p4a recipes > recipes.txt
+          head -150 recipes.txt
 
+      - name: Verify project files
+        shell: bash
+        run: |
           set -e
 
           test -f main.py
           test -f requirements.txt
+          test -f .p4a
 
-          test -f src/__init__.py
           test -f src/generator.py
+          test -f src/piper_bridge.c
+          test -f src/piper_bridge.h
 
-          test -f p4a-recipes/piper/__init__.py
           test -f p4a-recipes/onnxruntime/__init__.py
+          test -f p4a-recipes/piper/__init__.py
           test -f p4a-recipes/piper_phonemize/__init__.py
 
           test -f assets/bg.mp3
           test -f assets/font.ttf
           test -f assets/en_US-ryan-high.onnx.json
 
-          echo "All application files are present."
-
-
-      # ============================================================
-      # DOWNLOAD PIPER MODEL FROM GITHUB RELEASE
-      # ============================================================
-
-      - name: Download Piper Ryan High model
+      - name: Download Piper model
         shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
-
           set -e
 
           mkdir -p assets
 
           MODEL="assets/en_US-ryan-high.onnx"
 
-          if [ -f "$MODEL" ]; then
-
-            echo "Piper model already exists."
-
-          else
-
-            echo "Downloading Piper Ryan High model..."
+          if [ ! -s "$MODEL" ]; then
 
             curl \
               --fail \
@@ -353,99 +199,27 @@ jobs:
 
           test -s "$MODEL"
 
-          echo
-          echo "Piper model:"
           ls -lh "$MODEL"
 
-
-      # ============================================================
-      # VERIFY PIPER MODEL
-      # ============================================================
-
-      - name: Verify Piper model
+      - name: Verify model
         shell: bash
         run: |
-
           set -e
 
           test -s assets/en_US-ryan-high.onnx
           test -s assets/en_US-ryan-high.onnx.json
 
-          echo
-          echo "Model files:"
           ls -lh \
             assets/en_US-ryan-high.onnx \
             assets/en_US-ryan-high.onnx.json
 
-
-      # ============================================================
-      # CREATE P4A BUILD DIRECTORY
-      # ============================================================
-
-      - name: Prepare p4a build
+      - name: Build APK
         shell: bash
         run: |
-
-          mkdir -p build
-
-          mkdir -p dist
-
-          mkdir -p output
-
-          echo "p4a build directories ready."
-
-
-      # ============================================================
-      # CHECK PRIVATE RECIPES
-      # ============================================================
-
-      - name: Inspect private recipes
-        shell: bash
-        run: |
-
-          echo "=============================================="
-          echo "PRIVATE RECIPES"
-          echo "=============================================="
-
-          echo
-          echo "--- Piper recipe ---"
-
-          sed -n '1,260p' \
-            p4a-recipes/piper/__init__.py
-
-          echo
-          echo "--- ONNX Runtime recipe ---"
-
-          sed -n '1,160p' \
-            p4a-recipes/onnxruntime/__init__.py
-
-          echo
-          echo "--- Piper phonemize recipe ---"
-
-          sed -n '1,160p' \
-            p4a-recipes/piper_phonemize/__init__.py
-
-          echo
-          echo "=============================================="
-
-
-      # ============================================================
-      # BUILD
-      # ============================================================
-
-      - name: Build APK with python-for-android
-        shell: bash
-        env:
-          P4A_NO_DOWNLOAD_CACHE: "0"
-        run: |
-
           set -o pipefail
 
           mkdir -p build/p4a
-
-          echo "=============================================="
-          echo "STARTING ANDROID BUILD"
-          echo "=============================================="
+          mkdir -p dist
 
           python -m pythonforandroid.toolchain apk \
             --private . \
@@ -453,7 +227,7 @@ jobs:
             --name "BibleVerseShorts" \
             --version 1.0.0 \
             --bootstrap sdl2 \
-            --requirements python3,kivy,ffmpeg,libx264,av_codecs,piper \
+            --requirements python3,kivy,ffmpeg,libx264,av_codecs,onnxruntime,piper \
             --arch arm64-v8a \
             --android-api "${ANDROID_API}" \
             --ndk-api "${ANDROID_MIN_API}" \
@@ -464,105 +238,59 @@ jobs:
             --color always \
             2>&1 | tee build/p4a/build.log
 
-
-      # ============================================================
-      # IF BUILD FAILS - SHOW USEFUL LOG
-      # ============================================================
-
-      - name: Diagnose failed build
+      - name: Diagnose build
         if: failure()
         shell: bash
         run: |
-
           echo
-          echo "================================================"
+          echo "=============================================="
           echo "BUILD FAILED"
-          echo "================================================"
+          echo "=============================================="
 
           if [ -f build/p4a/build.log ]; then
 
             echo
-            echo "---- LAST 300 BUILD LOG LINES ----"
+            echo "----- LAST 400 LINES -----"
 
-            tail -300 \
-              build/p4a/build.log
+            tail -400 build/p4a/build.log
 
             echo
-            echo "---- AUTORECONF ERRORS ----"
+            echo "----- ERRORS -----"
 
             grep -n -i \
               -E \
-              "autoreconf|autoconf|automake|aclocal|configure.ac|configure:" \
+              "error:|fatal error|CMake Error|FAILED|undefined reference|not found|No such file" \
               build/p4a/build.log \
-              | tail -100 \
-              || true
-
-            echo
-            echo "---- CMAKE ERRORS ----"
-
-            grep -n -i \
-              -E \
-              "CMake Error|cmake error|ninja: error|FAILED" \
-              build/p4a/build.log \
-              | tail -100 \
+              | tail -200 \
               || true
 
           fi
 
-          echo
-          echo "================================================"
-
-
-      # ============================================================
-      # FIND APK
-      # ============================================================
-
-      - name: Find generated APK
+      - name: Find APK
         if: success()
         shell: bash
         run: |
-
           set -e
-
-          mkdir -p dist
-
-          echo "Searching for APK..."
-
-          find . \
-            -type f \
-            -name "*.apk" \
-            -print
 
           APK="$(find . \
             -type f \
-            -name "*.apk" \
-            | head -n 1)"
+            -name '*.apk' \
+            -not -path './.git/*' \
+            | head -1)"
 
           if [ -z "$APK" ]; then
-
-            echo
-            echo "ERROR: No APK was generated."
-
+            echo "No APK found."
             exit 1
-
           fi
 
-          echo
-          echo "APK found:"
+          echo "APK:"
           echo "$APK"
 
           cp "$APK" \
-            "dist/BibleVerseShorts-arm64-debug.apk"
+            dist/BibleVerseShorts-arm64-debug.apk
 
-          echo
-          echo "Final APK:"
           ls -lh \
-            "dist/BibleVerseShorts-arm64-debug.apk"
-
-
-      # ============================================================
-      # UPLOAD APK
-      # ============================================================
+            dist/BibleVerseShorts-arm64-debug.apk
 
       - name: Upload APK
         if: success()
@@ -573,17 +301,11 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-
-      # ============================================================
-      # UPLOAD BUILD LOG
-      # ============================================================
-
       - name: Upload build log
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: BibleVerseShorts-Build-Log
-          path: |
-            build/p4a/build.log
+          path: build/p4a/build.log
           if-no-files-found: ignore
           retention-days: 30

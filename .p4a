@@ -1,0 +1,13 @@
+--dist_name bibleverseshorts
+--bootstrap sdl2
+--requirements python3,kivy,ffmpeg,libx264,av_codecs,piper
+--arch arm64-v8a
+--android_api 35
+--ndk_api 24
+--private .
+--package com.bibleverseshorts.app
+--name BibleVerseShorts
+--version 1.0.0
+--orientation portrait
+--window
+--presplash-color 000000

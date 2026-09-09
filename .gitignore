@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+.buildozer/
+build/
+dist/
+bin/
+
+output/*.mp4
+output/*.zip
+output/.temp/
+
+.p4a-build/

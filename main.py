@@ -1,7 +1,4 @@
-import os
 import threading
-import zipfile
-from pathlib import Path
 
 from kivy.app import App
 from kivy.clock import Clock
@@ -14,7 +11,7 @@ from kivy.uix.progressbar import ProgressBar
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.textinput import TextInput
 
-from src.generator import VideoGenerator
+from src.generator import generate_videos
 
 
 class BibleVerseShortsApp(App):
@@ -22,30 +19,29 @@ class BibleVerseShortsApp(App):
     def build(self):
         self.title = "Bible Verse Shorts"
 
-        Window.clearcolor = (0.05, 0.05, 0.05, 1)
-
         root = BoxLayout(
             orientation="vertical",
-            padding=dp(12),
+            padding=dp(14),
             spacing=dp(10)
         )
 
         title = Label(
             text="BIBLE VERSE SHORTS",
             font_size=dp(24),
-            bold=True,
             size_hint_y=None,
-            height=dp(50)
+            height=dp(45),
+            bold=True
         )
 
         root.add_widget(title)
 
         info = Label(
-            text="Enter one Bible verse per line.\n"
-                 "Example: In the beginning God created the heaven and the earth. — Genesis 1:1",
-            font_size=dp(14),
+            text=(
+                "Enter one Bible verse per line.\n"
+                "Example: Verse — Genesis 1:1"
+            ),
             size_hint_y=None,
-            height=dp(60)
+            height=dp(55),
         )
 
         root.add_widget(info)
@@ -56,12 +52,38 @@ class BibleVerseShortsApp(App):
             foreground_color=(0, 0, 0, 1),
             background_color=(1, 1, 1, 1),
             cursor_color=(0, 0, 0, 1),
-            padding=[dp(12), dp(12)],
-            hint_text="Paste Bible verses here...",
-            hint_text_color=(0.4, 0.4, 0.4, 1)
+            hint_text=(
+                "Paste Bible verses here...\n\n"
+                "In the beginning God created the heaven "
+                "and the earth. — Genesis 1:1"
+            ),
+            padding=[
+                dp(12),
+                dp(12),
+                dp(12),
+                dp(12)
+            ],
         )
 
-        root.add_widget(self.input_box)
+        root.add_widget(
+            self.input_box
+        )
+
+        self.generate_button = Button(
+            text="GENERATE VIDEOS",
+            size_hint_y=None,
+            height=dp(55),
+            font_size=dp(18),
+            bold=True,
+        )
+
+        self.generate_button.bind(
+            on_release=self.start_generation
+        )
+
+        root.add_widget(
+            self.generate_button
+        )
 
         self.progress = ProgressBar(
             max=100,
@@ -70,55 +92,29 @@ class BibleVerseShortsApp(App):
             height=dp(12)
         )
 
-        root.add_widget(self.progress)
+        root.add_widget(
+            self.progress
+        )
 
         self.status = Label(
             text="Ready",
-            font_size=dp(14),
             size_hint_y=None,
-            height=dp(40)
+            height=dp(45),
         )
 
-        root.add_widget(self.status)
-
-        buttons = BoxLayout(
-            size_hint_y=None,
-            height=dp(55),
-            spacing=dp(8)
+        root.add_widget(
+            self.status
         )
-
-        self.generate_button = Button(
-            text="GENERATE VIDEOS",
-            font_size=dp(16)
-        )
-
-        self.generate_button.bind(
-            on_release=self.start_generation
-        )
-
-        buttons.add_widget(self.generate_button)
-
-        self.zip_button = Button(
-            text="ZIP VIDEOS",
-            font_size=dp(16)
-        )
-
-        self.zip_button.bind(
-            on_release=self.create_zip
-        )
-
-        buttons.add_widget(self.zip_button)
-
-        root.add_widget(buttons)
 
         return root
 
     def start_generation(self, *_):
-
         text = self.input_box.text.strip()
 
         if not text:
-            self.status.text = "Please enter at least one verse."
+            self.status.text = (
+                "Please enter at least one Bible verse."
+            )
             return
 
         lines = [
@@ -128,104 +124,66 @@ class BibleVerseShortsApp(App):
         ]
 
         self.generate_button.disabled = True
-
-        self.status.text = "Starting..."
+        self.progress.value = 0
 
         thread = threading.Thread(
-            target=self.generate_worker,
+            target=self.worker,
             args=(lines,),
             daemon=True
         )
 
         thread.start()
 
-    def generate_worker(self, lines):
-
+    def worker(self, lines):
         try:
-
-            generator = VideoGenerator(
-                progress_callback=self.update_progress,
-                status_callback=self.update_status
-            )
-
-            generator.generate_all(lines)
+            total = len(lines)
 
             Clock.schedule_once(
-                lambda dt: self.generation_finished()
+                lambda dt: self.set_status(
+                    f"Generating {total} video(s)..."
+                )
+            )
+
+            videos, zip_path = generate_videos(
+                lines
+            )
+
+            Clock.schedule_once(
+                lambda dt: self.finished(
+                    len(videos),
+                    str(zip_path)
+                )
             )
 
         except Exception as exc:
-
             message = str(exc)
 
             Clock.schedule_once(
-                lambda dt: self.generation_failed(message)
+                lambda dt: self.failed(
+                    message
+                )
             )
 
-    def update_progress(self, current, total):
+    def set_status(self, text):
+        self.status.text = text
 
-        percent = 0
-
-        if total:
-            percent = int(
-                (current / total) * 100
-            )
-
-        Clock.schedule_once(
-            lambda dt: setattr(
-                self.progress,
-                "value",
-                percent
-            )
-        )
-
-    def update_status(self, message):
-
-        Clock.schedule_once(
-            lambda dt: setattr(
-                self.status,
-                "text",
-                str(message)
-            )
-        )
-
-    def generation_finished(self):
-
+    def finished(self, count, zip_path):
         self.progress.value = 100
 
         self.status.text = (
-            "Generation completed."
+            f"Finished: {count} video(s)\n"
+            f"ZIP: {zip_path}"
         )
 
         self.generate_button.disabled = False
 
-    def generation_failed(self, message):
-
+    def failed(self, message):
         self.status.text = (
-            "ERROR: " + message
+            "Generation failed:\n"
+            + message
         )
 
         self.generate_button.disabled = False
-
-    def create_zip(self, *_):
-
-        try:
-
-            generator = VideoGenerator()
-
-            zip_path = generator.create_zip()
-
-            self.status.text = (
-                "ZIP created: " +
-                str(zip_path)
-            )
-
-        except Exception as exc:
-
-            self.status.text = (
-                "ZIP ERROR: " +
-                str(exc)
-            )
 
 
 if __name__ == "__main__":
